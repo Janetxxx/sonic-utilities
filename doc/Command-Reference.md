@@ -179,7 +179,6 @@
   * [Platform Component Firmware vendor specific behaviour](#platform-component-firmware-vendor-specific-behaviour)
 * [Platform Specific Commands](#platform-specific-commands)
   * [Mellanox Platform Specific Commands](#mellanox-platform-specific-commands)
-  * [Barefoot Platform Specific Commands](#barefoot-platform-specific-commands)
 * [PINS](#pins-show commands)
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
@@ -1188,9 +1187,28 @@ This command displays the status of the device's thermal sensors
      xSFP module 32 Temp           39.5       70.0       N/A            90.0            N/A      False  20200302 06:59:58
   ```
 
+**show platform bmc os**
+
+This command displays the BMC operating system (`openbmc` or `sonic`), as defined in
+`bmc_os.json` in the HwSKU directory.
+
+- Usage:
+  ```
+  show platform bmc os
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show platform bmc os
+  sonic
+  ```
+
 **show platform bmc summary**
 
-This command displays BMC summary information including manufacturer, model, part number, serial number, power state, and firmware version
+This command displays BMC summary information including manufacturer, model, part number,
+serial number, power state, and firmware version. Supported for both BMC OS types; when
+BMC OS is `sonic`, `FirmwareVersion` is shown as `N/A` since it cannot be retrieved without
+Redfish.
 
 - Usage:
   ```
@@ -1200,7 +1218,7 @@ This command displays BMC summary information including manufacturer, model, par
 - Options:
   - `--json`: Output information in JSON format
 
-- Example:
+- Example (OpenBMC):
   ```
   admin@sonic:~$ show platform bmc summary
   Manufacturer: ASPEED
@@ -1209,6 +1227,17 @@ This command displays BMC summary information including manufacturer, model, par
   SerialNumber: 123456789
   PowerState: On
   FirmwareVersion: 1.0.0
+  ```
+
+- Example (SONiC BMC):
+  ```
+  admin@sonic:~$ show platform bmc summary
+  Manufacturer: NVIDIA
+  Model: P4102-A01
+  PartNumber: 699-24102-0100-EB1
+  SerialNumber: MT260560000K
+  PowerState: On
+  FirmwareVersion: N/A
   ```
 
 - Example (JSON format):
@@ -1226,7 +1255,10 @@ This command displays BMC summary information including manufacturer, model, par
 
 **show platform bmc eeprom**
 
-This command displays BMC EEPROM information
+This command displays BMC EEPROM information. When BMC OS is `openbmc`, fields come from
+Redfish. When BMC OS is `sonic`, Manufacturer, Model, PartNumber, and SerialNumber are read
+from the BMC remote STATE_DB; PowerState reflects the reachability of the BMC (`On` if it
+responds to ping, `Off` otherwise).
 
 - Usage:
   ```
@@ -1236,7 +1268,7 @@ This command displays BMC EEPROM information
 - Options:
   - `--json`: Output information in JSON format
 
-- Example:
+- Example (OpenBMC):
   ```
   admin@sonic:~$ show platform bmc eeprom
   Manufacturer: ASPEED
@@ -1244,6 +1276,16 @@ This command displays BMC EEPROM information
   PartNumber: 123-12345-1234-AB1
   PowerState: On
   SerialNumber: 123456789
+  ```
+
+- Example (SONiC BMC):
+  ```
+  admin@sonic:~$ show platform bmc eeprom
+  Manufacturer: NVIDIA
+  Model: P4102-A01
+  PartNumber: 699-24102-0100-EB1
+  PowerState: On
+  SerialNumber: MT260560000K
   ```
 
 - Example (JSON format):
@@ -2636,11 +2678,27 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#arp--n
 
 ## BMC
 
+On Switch-Host platforms, the BMC peer on the USB/BMC link may run OpenBMC (Redfish) or
+SONiC-on-BMC (Redis). The type is defined per HwSKU by the `os` field (`openbmc` or
+`sonic`) in `bmc_os.json` in the HwSKU directory
+(`/usr/share/sonic/device/<platform>/<hwsku>/bmc_os.json`). When the file is missing or
+invalid, the default is `sonic`. To change the BMC OS, edit this file. Use
+`show platform bmc os` to display the current value.
+
+All BMC commands are supported only when run on the Switch-Host (not on the BMC
+itself). OpenBMC-only commands (Redfish session management: `reset-root-password`,
+`open-session`, `close-session`) additionally require `os` to be `openbmc`.
+`show platform bmc eeprom` and `show platform bmc summary` work for both: OpenBMC returns full Redfish
+EEPROM fields and firmware version; SONiC BMC returns Manufacturer, Model, PartNumber, and
+SerialNumber from remote STATE_DB, with PowerState derived from BMC reachability (ping) and
+FirmwareVersion shown as `N/A`.
+
 ### BMC config commands
 
 **config bmc open-session**
 
-This command opens a session with the BMC and returns session credentials
+This command opens a session with the BMC and returns session credentials. Supported only
+when BMC OS is `openbmc`.
 
 - Usage:
   ```
@@ -2656,7 +2714,8 @@ This command opens a session with the BMC and returns session credentials
 
 **config bmc close-session**
 
-This command closes a BMC session using the provided session ID
+This command closes a BMC session using the provided session ID. Supported only when BMC
+OS is `openbmc`.
 
 - Usage:
   ```
@@ -2674,7 +2733,8 @@ This command closes a BMC session using the provided session ID
 
 **config bmc reset-root-password**
 
-This command resets the BMC root password to default
+This command resets the BMC root password to default. Supported only when BMC OS is
+`openbmc`.
 
 - Usage:
   ```
@@ -7389,8 +7449,19 @@ This command displays some more fields such as Lanes, Speed, MTU, Type, Asymmetr
 
 - Usage:
   ```
-  show interfaces status [<interface_name>]
+  show interfaces status [<interface_name>] [-l <location>]
   ```
+
+On a chassis-packet supervisor, the default frontend view displays line-card
+interfaces using the normal display filtering. Use `-d all` to include the
+supervisor's internal interfaces. Use `-l SUPERVISOR` or the matching
+`-l SUPERVISOR<n>` name to select the local supervisor, `-l LINE-CARD<n>` for
+one line card, or `-l all` for all chassis locations. A numbered supervisor
+location that does not match the local supervisor is rejected.
+Aggregate output labels each section with its chassis location. When internal
+interfaces are filtered from a supervisor view, the command prints a reminder
+to use `-d all`. Other supervisor and non-supervisor platforms retain their
+existing behavior.
 
 - Example (show interface status of all interfaces):
   ```
@@ -11428,41 +11499,6 @@ config platform mlnx
 This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms. 
 
 The platform mellanox command currently includes no sub command.
-
-### Barefoot Platform Specific Commands
-
-**show platform barefoot profile**
-
-This command displays active P4 profile and lists available ones.
-
-- Usage:
-  ```
-  show platform barefoot profile
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform barefoot profile
-  Current profile: x1
-  Available profile(s):
-  x1
-  x2
-  ```
-
-**config platform barefoot profile**
-
-This command sets P4 profile.
-
-- Usage:
-  ```
-  config platform barefoot profile <p4_profile> [-y|--yes]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ sudo config platform barefoot profile x1
-  Swss service will be restarted, continue? [y/N]: y
-  ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#platform-specific-commands)
 
